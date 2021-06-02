@@ -8,7 +8,6 @@ import seaborn as sns
 import sys
 import matplotlib.pyplot as plt
 from wordcloud import WordCloud, STOPWORDS, ImageColorGenerator
-##%matplotlib inline# library for train test split
 from sklearn.model_selection import train_test_split# deep learning libraries for text pre-processing
 import tensorflow as tf
 from tensorflow.keras.preprocessing.text import Tokenizer
@@ -16,6 +15,10 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences# Modeling
 from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Embedding, GlobalAveragePooling1D, Dense, Dropout, LSTM, Bidirectional, GRU
+ 
+from collections import Counter
+from sklearn.datasets import make_classification
+from imblearn.over_sampling import RandomOverSampler
 
 import csv
 csv.field_size_limit(2147483647)
@@ -39,8 +42,8 @@ def plot_graphs(var1, var2, string, model_type, metrics):
 filepath = 'data/'
 filename = 'test_May10.txt'
 
-colnames = ['userid', 'label', 'message']
-messages = pd.read_csv(f'{filepath}{filename}',
+colnames = ['userid', 'label', 'review']
+reviews = pd.read_csv(f'{filepath}{filename}',
                  warn_bad_lines=False,
                  skiprows=1,
                  names=colnames,
@@ -50,74 +53,73 @@ messages = pd.read_csv(f'{filepath}{filename}',
                  encoding='latin1',
                  engine='python')
 
-messages = messages.iloc[: , -2:]
-##url = 'https://raw.githubusercontent.com/ShresthaSudip/SMS_Spam_Detection_DNN_LSTM_BiLSTM/master/SMSSpamCollection'
-##messages = pd.read_csv(url, sep ='\t',names=["label", "message"])
+reviews = reviews.iloc[: , -2:]
 
-# Get all the ham and spam emails
-ham_msg = messages[messages.label ==1]
-spam_msg = messages[messages.label==0]# Create numpy list to visualize using wordcloud
-ham_msg_text = " ".join(ham_msg.message.to_numpy().tolist())
-spam_msg_text = " ".join(spam_msg.message.to_numpy().tolist())
+local_reviews = reviews[reviews.label==1]
+nonlocal_reviews = reviews[reviews.label==0]
 
-# wordcloud of ham messages
-ham_msg_cloud = WordCloud(width =520, height =260, stopwords=STOPWORDS,max_font_size=50, background_color ="black", colormap='Blues').generate(ham_msg_text)
+local_reviews_text = " ".join(local_reviews.review.to_numpy().tolist())
+nonlocal_reviews_text = " ".join(nonlocal_reviews.review.to_numpy().tolist())
+
+# wordclouds for local and non-local reviews
+local_reviews_cloud = WordCloud(width=520, height=260, stopwords=STOPWORDS, max_font_size=50, background_color ="black", colormap='Blues').generate(local_reviews_text)
 plt.figure(figsize=(16,10))
-plt.imshow(ham_msg_cloud, interpolation='bilinear')
-plt.axis('off') # turn off axis
+plt.imshow(local_reviews_cloud, interpolation='bilinear')
+plt.axis('off') 
 plt.show()
 
-# wordcloud of spam messages
-spam_msg_cloud = WordCloud(width =520, height =260, stopwords=STOPWORDS,max_font_size=50, background_color ="black", colormap='Blues').generate(spam_msg_text)
+nonlocal_reviews_cloud = WordCloud(width=520, height=260, stopwords=STOPWORDS, max_font_size=50, background_color ="black", colormap='Blues').generate(nonlocal_reviews_text)
 plt.figure(figsize=(16,10))
-plt.imshow(spam_msg_cloud, interpolation='bilinear')
-plt.axis('off') # turn off axis
+plt.imshow(nonlocal_reviews_cloud, interpolation='bilinear')
+plt.axis('off') 
 plt.show()
 
-# we can observe imbalance data here 
+# This will allow us to view data rowcount differences
 plt.figure(figsize=(8,6))
-sns.countplot(messages.label)
-# Percentage of spam messages
-(len(spam_msg)/len(ham_msg))*100 # 15.48%
+sns.countplot(reviews.label)
+(len(nonlocal_reviews)/len(local_reviews)) * 100 
 plt.show()
 
-# one way to fix it is to downsample the ham msg
-ham_msg_df = ham_msg.sample(n = len(spam_msg), random_state = 44)
-spam_msg_df = spam_msg
-print(ham_msg_df.shape, spam_msg_df.shape)
+# Oversampling
+print(Counter(nonlocal_reviews))
+oversample = RandomOverSampler(sampling_strategy='minority')
+local_over, nonlocal_over = oversample.fit_resample(local_reviews, nonlocal_reviews)
+print(Counter(nonlocal_over))
 
-# Create a dataframe with these ham and spam msg
-msg_df = ham_msg_df.append(spam_msg_df).reset_index(drop=True)
-plt.figure(figsize=(8,6))
-sns.countplot(msg_df.label)
-plt.title('Distribution of ham and spam email messages (after downsampling)')
-plt.xlabel('Message types')
-plt.show()
+### downsample the local reviews as they vastly outnumber the non-local ones
+##local_reviews_df = local_reviews.sample(n = len(nonlocal_reviews), random_state = 23)
+##nonlocal_reviews_df = nonlocal_reviews
+##
+##reviews_df = local_reviews_df.append(nonlocal_reviews_df).reset_index(drop=True)
+##plt.figure(figsize=(8,6))
+##sns.countplot(reviews_df.label)
+##plt.title('Distribution of local and non-local review (after downsampling)')
+##plt.xlabel('Local/Non-local')
+##plt.show()
+##
+### Get length column for each text
+##reviews_df['text_length'] = reviews_df['message'].apply(len)
+###Calculate average length by label types
+##labels = reviews_df.groupby('label').mean()
 
-# Get length column for each text
-msg_df['text_length'] = msg_df['message'].apply(len)#Calculate average length by label types
-labels = msg_df.groupby('label').mean()
-
-##sys.exit()
+sys.exit()
 
 ########################################################################
 ## Prepare train/test data and pre-process text
 ########################################################################
 
-# Map ham label as 0 and spam as 1
-msg_df['msg_type']= msg_df['label'].map({0: 0, 1: 1})
-msg_label = msg_df['msg_type'].values# Split data into train and test
-train_msg, test_msg, train_labels, test_labels = train_test_split(msg_df['message'], msg_label, test_size=0.2, random_state=434)
+##train_msg, test_msg, train_labels, test_labels 
+X_train, X_test, y_train, y_test = train_test_split(local_over, nonlocal_over, test_size=0.2, random_state=2)
 
 # Defining pre-processing hyperparameters
-max_len = 50 
+max_len = 500 
 trunc_type = "post" 
 padding_type = "post" 
 oov_tok = "<OOV>" 
-vocab_size = 500
+vocab_size = 10000
 
 tokenizer = Tokenizer(num_words = vocab_size, char_level=False, oov_token = oov_tok)
-tokenizer.fit_on_texts(train_msg)
+tokenizer.fit_on_texts(X_train)
 
 word_index = tokenizer.word_index
 # check how many words 
@@ -129,7 +131,7 @@ print('There are %s unique tokens in training data. ' % tot_words)
 ########################################################################
 
 # Sequencing and padding on training and testing 
-training_sequences = tokenizer.texts_to_sequences(train_msg)
+training_sequences = tokenizer.texts_to_sequences(X_train)
 training_padded = pad_sequences (training_sequences, maxlen = max_len, padding = padding_type, truncating = trunc_type )
 testing_sequences = tokenizer.texts_to_sequences(test_msg)
 testing_padded = pad_sequences(testing_sequences, maxlen = max_len,
@@ -143,31 +145,27 @@ print('Shape of testing tensor: ', testing_padded.shape)
 ## Dense Spam Detection Model
 ########################################################################
 
-vocab_size = 500 # As defined earlier
 embeding_dim = 16
-drop_value = 0.2 # dropout
+drop_value = 0.2 
 n_dense = 24
+num_epochs = 50
 
 #Dense model architecture
 model = Sequential()
 model.add(Embedding(vocab_size, embeding_dim, input_length=max_len))
 model.add(GlobalAveragePooling1D())
-model.add(Dense(24, activation='relu'))
+model.add(Dense(n_dense, activation='relu'))
 model.add(Dropout(drop_value))
 model.add(Dense(1, activation='sigmoid'))
 
 model.summary()
 model.compile(loss='binary_crossentropy',optimizer='adam' ,metrics=['accuracy'])
-# fitting a dense spam detector model
-num_epochs = 30
 early_stop = EarlyStopping(monitor='val_loss', patience=3)
-history = model.fit(training_padded, train_labels, epochs=num_epochs, validation_data=(testing_padded, test_labels),callbacks =[early_stop], verbose=2)
-# Model performance on test data 
-model.evaluate(testing_padded, test_labels)
+##history = model.fit(training_padded, y_train, epochs=num_epochs, validation_data=(testing_padded, y_test),callbacks =[early_stop], verbose=2)
+history = model.fit(training_padded, y_train, epochs=num_epochs, validation_data=(testing_padded, y_test), verbose=2)
+model.evaluate(testing_padded, y_test)
 
-# Read as a dataframe 
 metrics = pd.DataFrame(history.history)
-# Rename column
 metrics.rename(columns = {'loss': 'Training_Loss', 'accuracy': 'Training_Accuracy', 'val_loss': 'Validation_Loss', 'val_accuracy': 'Validation_Accuracy'}, inplace = True)
 print(metrics)
 
@@ -183,26 +181,24 @@ plot_graphs('Training_Accuracy', 'Validation_Accuracy', 'accuracy', 'Dense', met
 ########################################################################
 
 #LSTM hyperparameters
-n_lstm = 20
-drop_lstm =0.2
+n_lstm = 32
 
 #LSTM Spam detection architecture
 model1 = Sequential()
 model1.add(Embedding(vocab_size, embeding_dim, input_length=max_len))
-model1.add(LSTM(n_lstm, dropout=drop_lstm, return_sequences=True))
-model1.add(LSTM(n_lstm, dropout=drop_lstm, return_sequences=True))
+model1.add(LSTM(n_lstm, dropout=drop_value, return_sequences=True))
+model1.add(LSTM(n_lstm, dropout=drop_value, return_sequences=True))
 model1.add(Dense(1, activation='sigmoid'))
 
 model1.compile(loss = 'binary_crossentropy', optimizer = 'adam', metrics=['accuracy'])
 
-num_epochs = 30
-early_stop = EarlyStopping(monitor='val_loss', patience=2)
-history = model1.fit(training_padded, train_labels, epochs=num_epochs, validation_data=(testing_padded, test_labels),callbacks =[early_stop], verbose=2)
+early_stop = EarlyStopping(monitor='val_loss', patience=3)
+##history = model1.fit(training_padded, y_train, epochs=num_epochs, validation_data=(testing_padded, y_test),callbacks =[early_stop], verbose=2)
+history = model1.fit(training_padded, y_train, epochs=num_epochs, validation_data=(testing_padded, y_test), verbose=2)
 
 # Create a dataframe
 metrics = pd.DataFrame(history.history)# Rename column
-metrics.rename(columns = {'loss': 'Training_Loss', 'accuracy': 'Training_Accuracy',
-                         'val_loss': 'Validation_Loss', 'val_accuracy': 'Validation_Accuracy'}, inplace = True)
+metrics.rename(columns = {'loss': 'Training_Loss', 'accuracy': 'Training_Accuracy', 'val_loss': 'Validation_Loss', 'val_accuracy': 'Validation_Accuracy'}, inplace = True)
 print(metrics)
 
 plt.subplot(423)
@@ -216,21 +212,19 @@ plot_graphs('Training_Accuracy', 'Validation_Accuracy', 'accuracy', 'LSTM', metr
 
 model2 = Sequential()
 model2.add(Embedding(vocab_size, embeding_dim, input_length=max_len))
-model2.add(Bidirectional(LSTM(n_lstm, dropout=drop_lstm, return_sequences=True)))
+model2.add(Bidirectional(LSTM(n_lstm, dropout=drop_value, return_sequences=True)))
 model2.add(Dense(1, activation='sigmoid'))
 
 model2.compile(loss = 'binary_crossentropy', optimizer = 'adam', metrics=['accuracy'])
 
 # Training
-num_epochs = 30
-early_stop = EarlyStopping(monitor='val_loss', patience=2)
-history = model2.fit(training_padded, train_labels, epochs=num_epochs, 
-                    validation_data=(testing_padded, test_labels),callbacks =[early_stop], verbose=2)
+early_stop = EarlyStopping(monitor='val_loss', patience=3)
+##history = model2.fit(training_padded, y_train, epochs=num_epochs, validation_data=(testing_padded, y_test),callbacks =[early_stop], verbose=2)
+history = model2.fit(training_padded, y_train, epochs=num_epochs, validation_data=(testing_padded, y_test), verbose=2)
 
 # Create a dataframe
 metrics = pd.DataFrame(history.history)# Rename column
-metrics.rename(columns = {'loss': 'Training_Loss', 'accuracy': 'Training_Accuracy',
-                         'val_loss': 'Validation_Loss', 'val_accuracy': 'Validation_Accuracy'}, inplace = True)
+metrics.rename(columns = {'loss': 'Training_Loss', 'accuracy': 'Training_Accuracy', 'val_loss': 'Validation_Loss', 'val_accuracy': 'Validation_Accuracy'}, inplace = True)
 print(metrics)
 
 plt.subplot(425)
@@ -244,26 +238,24 @@ plot_graphs('Training_Accuracy', 'Validation_Accuracy', 'accuracy', 'Bi-directio
 ########################################################################
 
 #GRU hyperparameters
-n_gru = 20
-drop_gru =0.2
+n_gru = 32
 
 #GRU Spam detection architecture
 model3 = Sequential()
 model3.add(Embedding(vocab_size, embeding_dim, input_length=max_len))
-model3.add(GRU(n_gru, dropout=drop_gru, return_sequences=True))
-model3.add(GRU(n_gru, dropout=drop_gru, return_sequences=True))
+model3.add(GRU(n_gru, dropout=drop_value, return_sequences=True))
+model3.add(GRU(n_gru, dropout=drop_value, return_sequences=True))
 model3.add(Dense(1, activation='sigmoid'))
 
 model3.compile(loss = 'binary_crossentropy', optimizer = 'adam', metrics=['accuracy'])
 
-num_epochs = 30
-early_stop = EarlyStopping(monitor='val_loss', patience=2)
-history = model3.fit(training_padded, train_labels, epochs=num_epochs, validation_data=(testing_padded, test_labels),callbacks =[early_stop], verbose=2)
+early_stop = EarlyStopping(monitor='val_loss', patience=3)
+##history = model3.fit(training_padded, y_train, epochs=num_epochs, validation_data=(testing_padded, y_test),callbacks =[early_stop], verbose=2)
+history = model3.fit(training_padded, y_train, epochs=num_epochs, validation_data=(testing_padded, y_test), verbose=2)
 
 # Create a dataframe
 metrics = pd.DataFrame(history.history)# Rename column
-metrics.rename(columns = {'loss': 'Training_Loss', 'accuracy': 'Training_Accuracy',
-                         'val_loss': 'Validation_Loss', 'val_accuracy': 'Validation_Accuracy'}, inplace = True)
+metrics.rename(columns = {'loss': 'Training_Loss', 'accuracy': 'Training_Accuracy', 'val_loss': 'Validation_Loss', 'val_accuracy': 'Validation_Accuracy'}, inplace = True)
 print(metrics)
 
 plt.subplot(427)
