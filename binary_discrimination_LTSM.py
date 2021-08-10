@@ -168,26 +168,25 @@ p={
 
 model = tf.keras.models.load_model('model1.h5', compile=False)
 model.compile(loss=p['loss'], optimizer=p['optimizer'], metrics=['accuracy', keras_metrics.precision(), keras_metrics.recall()])
-result = model.evaluate(X_test, y_test)
-loss = result[0]
-accuracy = result[1]
-precision = result[2]
-recall = result[3]
-print(f'[+] Loss:     {loss*100:.2f}%')
-print(f'[+] Accuracy: {accuracy*100:.2f}%')
-print(f'[+] Precision:{precision*100:.2f}%')
-print(f'[+] Recall:   {recall*100:.2f}%')
-
-model.summary()
-
-preds = model.predict(X_test)
-
-cm = confusion_matrix(np.argmax(y_test, axis=1), np.argmax(preds, axis=1))
-f = sns.heatmap(cm, annot=True, fmt='g')
-plt.show()
+##result = model.evaluate(X_test, y_test)
+##loss = result[0]
+##accuracy = result[1]
+##precision = result[2]
+##recall = result[3]
+##print(f'[+] Loss:     {loss*100:.2f}%')
+##print(f'[+] Accuracy: {accuracy*100:.2f}%')
+##print(f'[+] Precision:{precision*100:.2f}%')
+##print(f'[+] Recall:   {recall*100:.2f}%')
+##
+##model.summary()
 
 preds = model.predict(X_test)
+
+##cm = confusion_matrix(np.argmax(y_test, axis=1), np.argmax(preds, axis=1))
+##f = sns.heatmap(cm, annot=True, fmt='g')
+##plt.show()
+
 with open('../data/predictions.csv', 'a', encoding='utf-8') as out_file:
     for i in range(len(preds)):
-        output = '%s, %s, %s \n' % (X_test_first.values[i], y_test_first.values[i], preds[i])
+        output = '%s, %s, %s \n' % (X_test_first.values[i], y_test_first.values[i], preds[i][1])
         out_file.write(output)
